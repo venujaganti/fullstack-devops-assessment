@@ -68,23 +68,14 @@ jobs:
             ghcr.io/${{ github.repository_owner }}/assessment-frontend:latest
           cache-from: type=gha,scope=frontend
           cache-to: type=gha,mode=max,scope=frontend
-  
-  deploy:
+
+   deploy:
     needs: publish
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
-
-      - name: Prepare EC2 deployment directory
-        uses: appleboy/ssh-action@v1.2.0
-        with:
-          host: ${{ secrets.EC2_HOST }}
-          username: ${{ secrets.EC2_USER }}
-          key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          script: |
-            mkdir -p "${{ secrets.EC2_APP_DIR }}"
 
       - name: Copy compose and deploy script
         uses: appleboy/scp-action@v0.1.7
@@ -98,7 +89,6 @@ jobs:
       - name: Deploy to EC2
         uses: appleboy/ssh-action@v1.2.0
         env:
-          APP_ENV_FILE: ${{ secrets.APP_ENV_FILE }}
           IMAGE_TAG: ${{ github.sha }}
           GHCR_OWNER: ${{ github.repository_owner }}
           GHCR_USER: ${{ github.actor }}
@@ -109,21 +99,34 @@ jobs:
           host: ${{ secrets.EC2_HOST }}
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
-          envs: APP_ENV_FILE,IMAGE_TAG,GHCR_OWNER,GHCR_USER,GHCR_TOKEN,APP_DIR
+          envs: IMAGE_TAG,GHCR_OWNER,GHCR_USER,GHCR_TOKEN,APP_DIR
+
           script: |
-            set -e
+            set -eu
 
             cd "$APP_DIR"
 
-            echo "Starting deployment..."
+            if [ ! -f .env ]; then
+              echo "ERROR: EC2 .env file is missing"
+              exit 1
+            fi
 
-            printf '%s' "$APP_ENV_FILE" > .env
+            if [ ! -f docker-compose.yml ]; then
+              echo "ERROR: docker-compose.yml is missing"
+              exit 1
+            fi
+
+            if [ ! -f deploy/deploy-remote.sh ]; then
+              echo "ERROR: deploy/deploy-remote.sh is missing"
+              exit 1
+            fi
+
             chmod 600 .env
 
-            echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+            echo "$GHCR_TOKEN" | docker login ghcr.io \
+              -u "$GHCR_USER" \
+              --password-stdin
 
             chmod +x deploy/deploy-remote.sh
 
             ./deploy/deploy-remote.sh
-
-            echo "Deployment completed successfully."

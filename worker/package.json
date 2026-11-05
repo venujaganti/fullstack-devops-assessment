@@ -1,0 +1,1 @@
+{"name":"assessment-worker","version":"1.0.0","private":true,"scripts":{"build":"tsc","start":"node dist/worker.js","lint":"tsc --noEmit"},"dependencies":{"bullmq":"^5.34.10","pg":"^8.13.1"},"devDependencies":{"@types/node":"^22.10.2","typescript":"^5.7.2"}}
